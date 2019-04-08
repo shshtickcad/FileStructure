@@ -25,62 +25,32 @@ namespace FileStrut.Controllers
         {
             _context = context;
             Configuration = configuration;
-            createFolderStructure();
+            CreateFolderStructure();
         }
 
-        private async void createFolderStructure()
+        private async void CreateFolderStructure()
         {
-            const string defaultFolderName = "000";
-            string counter = "";
-            int parentFolderId = 1;
-            string partialPath = root + defaultFolderName;
-            Track.level = 0;
+            int folderName = 0;
+            string pPath = "";
 
-            for (int i = 0; i < 3; i++)
+            int structureExists = _context.Counter.Count();
+            for (int i = 0; i < 6; i++)
             {
-                counter += defaultFolderName + "/";
-
-                if (!Directory.Exists(root + counter))
+                pPath += folderName + "00/";
+                if (structureExists != 6)
                 {
-                    if (i == 0)
+                    Counter count = new Counter()
                     {
-                        Folder Pholder = new Folder()
-                        {
-                            Id = 0,
-                            FolderName = defaultFolderName,
-                            DateCreated = DateTime.UtcNow,
-                            Location = Path.GetRelativePath(root, partialPath),
-                            ParentFolderId = null,
-                        };
-
-                        await _context.Folders.AddAsync(Pholder);
-                        _context.SaveChanges();
-
-                        Directory.CreateDirectory(partialPath);
-
-                    }
-                    else
-                    {
-                        Folder parentFolder = await _context.Folders.LastOrDefaultAsync();
-                        parentFolderId++;
-                        string path = root + "/" + parentFolder.Location + "/" + defaultFolderName;
-
-                        Folder Pholder = new Folder()
-                        {
-                            Id = 0,
-                            FolderName = defaultFolderName,
-                            DateCreated = DateTime.UtcNow,
-                            Location = Path.GetRelativePath(root, path),
-                            ParentFolderId = parentFolder.Id,
-                        };
-                        Directory.CreateDirectory(path);
-                        await _context.Folders.AddAsync(Pholder);
-                        _context.SaveChanges();
-                    }
+                        Id = 0,
+                        CounterNumber = folderName,
+                    };
+                    await _context.Counter.AddAsync(count);
+                    _context.SaveChanges();
+                    Directory.CreateDirectory(root + pPath);
                 }
-                Track.level++;
+                string path = root + pPath;
             }
-            Track.FolderLevels = root + counter;
+            Track.FolderLevels = root + pPath;
         }
 
         [HttpPost("up")]
@@ -92,14 +62,14 @@ namespace FileStrut.Controllers
 
             //store the file
             FileMaster duplicateFiles = await _context.Files.Include(p => p.FileIterations).FirstOrDefaultAsync(p => p.FileName == file.FileName);
-          
+
             //Folder getLastFolder = await _context.Folders.LastOrDefaultAsync();
             //Folder parentFolder = await _context.Folders.FirstOrDefaultAsync(p => p.Id == getLastFolder.Id);
 
             if (duplicateFiles != null)
             {
                 string dupliPath = root + duplicateFiles.Location + "/" + duplicateFiles.FileName;
-                fullPath = formatthePath(dupliPath);
+                fullPath = FormatthePath(dupliPath);
             }
 
             if (file.Length > 0)
@@ -134,44 +104,33 @@ namespace FileStrut.Controllers
         private async Task<IActionResult> upNewFile(IFormFile file)
         {
             string fname = "";
+          
             Stream stream1 = file.OpenReadStream();
             CheckSum objCheckSum = new CheckSum();
 
-            int leng = Track.FolderLevels.Length;
+            //string hafPath = Track.FolderLevels;
 
-            for (int i = 0; i < 3; i++)
+            Counter count = await _context.Counter.LastOrDefaultAsync();
+
+            for (int i = 0; i < 6; i++)
             {
-                fname = i + "";
-
-                if (fname.Length < 2)
-                    fname = "00" + i;
-                else if (fname.Length < 3)
-                    fname = "0" + i;
-                else if (fname.Length < 4)
-                    fname = i + "";
-
-                if (!Directory.Exists(Track.FolderLevels + fname))
-                    break;
-                if (i == 2)
+                if (count.CounterNumber == 5)
                 {
-                    if (leng == 34) {
-                        Track.FolderLevels = Track.FolderLevels.Remove(30);
-                        i = 0;
-                        leng = Track.FolderLevels.Length;
-                    }
-                    else if (leng == 30) {
-                        Track.FolderLevels = Track.FolderLevels.Remove(26);
-                        i = 0;
-                        leng = Track.FolderLevels.Length;
-                    }
-                    else if (leng == 26) {
-                        Track.FolderLevels = Track.FolderLevels.Remove(22);
-                        i = 0;
-                        leng = Track.FolderLevels.Length;
-                    }else if (leng < 26)
-                    {
-                        return new ObjectResult("Storage is Full!");
-                    }
+                    await FormatFolders(count);
+                }
+                if (count.CounterNumber < 5)
+                {
+                    fname = count.CounterNumber + "";
+
+                    if (fname.Length < 2)
+                        fname = "00" + i;
+                    else if (fname.Length < 3)
+                        fname = "0" + i;
+                    else if (fname.Length < 4)
+                        fname = i + "";
+
+                    if (!Directory.Exists(Track.FolderLevels + fname))
+                        break;
                 }
             }
 
@@ -179,28 +138,22 @@ namespace FileStrut.Controllers
 
             if (!Directory.Exists(nroot))
             {
-                Folder parentfolder = await _context.Folders.LastOrDefaultAsync();
-                int parentid = 0;
-                if (parentfolder.Id == 3)
-                {
-                    parentid = (int)parentfolder.Id;
-                }
-                else
-                {
-                    parentid = (int)parentfolder.ParentFolderId;
-                }
-
                 Folder pholder = new Folder()
                 {
                     Id = 0,
                     FolderName = fname,
                     DateCreated = DateTime.UtcNow,
-                    Location = Path.GetRelativePath(root, nroot),
-                    ParentFolderId = parentid,
+                    Location = Path.GetRelativePath(Track.FolderLevels, nroot),
+                    ParentFolderId = null,
                 };
                 EntityEntry<Folder> entry1 = await _context.Folders.AddAsync(pholder);
                 _context.SaveChanges();
                 Directory.CreateDirectory(nroot);
+
+                Counter lcount = await _context.Counter.LastOrDefaultAsync();
+                int lastCount = lcount.CounterNumber++;
+                EntityEntry<Counter> entr = _context.Counter.Update(lcount);
+                _context.SaveChanges();
             }
 
             Folder uploadingfolder = _context.Folders.LastOrDefault();
@@ -211,7 +164,7 @@ namespace FileStrut.Controllers
             {
                 Id = 0,
                 FileName = Path.GetFileName(file.FileName),
-                Name = Path.GetFileNameWithoutExtension(file.FileName),
+                //Name = Path.GetFileNameWithoutExtension(file.FileName),
                 ClientFilePath = Path.GetFullPath(file.FileName),
                 DateUploaded = DateTime.UtcNow,
                 DateUpdated = DateTime.UtcNow,
@@ -252,7 +205,6 @@ namespace FileStrut.Controllers
 
             return Ok();
         }
-
         private async Task<FileMaster> updateFile(Stream stream, CheckSum checkSum, IFormFile file, FileMaster duplicateFiles, string path)
         {
             FileIteration iteration = new FileIteration
@@ -276,7 +228,7 @@ namespace FileStrut.Controllers
             duplicateFiles = entry2.Entity;
             string newFileName = duplicateFiles.Id + "_" + duplicateFiles.VersionNumber + Path.GetExtension(path);
             string thenPath = root + "/" + duplicateFiles.Location + "/" + newFileName;
-            string newFilePath = formatthePath(thenPath);
+            string newFilePath = FormatthePath(thenPath);
 
             entity.Entity.IterationName = newFileName;
             entity.Entity.IterationPath = newFilePath;
@@ -295,7 +247,7 @@ namespace FileStrut.Controllers
             return entry2.Entity;
         }
 
-        private string formatthePath(string path)
+        private string FormatthePath(string path)
         {
             string rePairs = "";
             string repaired = "";
@@ -305,6 +257,31 @@ namespace FileStrut.Controllers
                 repaired += rePairs.Replace("\\", "/");
             }
             return repaired;
+        }
+
+        private async Task<IActionResult> FormatFolders(Counter count)
+        {
+            //increase the previous counter by 1
+            //and set the current counterNumber to 0 again.
+            string nPath = "";
+
+            Counter count2 = await _context.Counter.Where(c => c.Id == 5).FirstOrDefaultAsync();
+            count2.CounterNumber++;
+            count.CounterNumber = 0;
+            _context.Counter.Update(count2);
+            _context.Counter.Update(count);
+            _context.SaveChanges();
+
+            List<Counter> counter = await _context.Counter.ToListAsync();
+
+            foreach (var item in counter)
+            {
+                nPath += item.CounterNumber + "00/";
+            }
+
+            Track.FolderLevels = root + nPath;
+
+            return Ok();
         }
     }
 }
